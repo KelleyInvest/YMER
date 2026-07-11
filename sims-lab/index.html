@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stick Sims — v1.0</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Global error catcher -->
+  <div id="error-display" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;background:#f2555a;color:#fff;font:13px monospace;padding:10px;white-space:pre-wrap;"></div>
+  <script>
+    window.onerror = function(msg, url, line, col, err) {
+      var d = document.getElementById('error-display');
+      d.style.display = 'block';
+      d.textContent += 'ERROR: ' + msg + '\n  at ' + (url||'') + ':' + line + '\n';
+      console.error('Global error:', msg, url, line, err);
+    };
+    console.log('[BOOT] HTML parsed, error handler installed');
+  </script>
+
+  <!-- Header: title + mode buttons + speed controls -->
+  <header id="game-header">
+    <h1>STICK SIMS</h1>
+    <div class="mode-tabs">
+      <button id="mode-live" class="mode-btn active">LIVE</button>
+      <button id="mode-build" class="mode-btn">BUILD</button>
+      <button id="mode-buy" class="mode-btn">BUY</button>
+    </div>
+    <div class="speed-controls">
+      <button class="speed-btn" data-speed="0">||</button>
+      <button class="speed-btn active" data-speed="1">1x</button>
+      <button class="speed-btn" data-speed="2">2x</button>
+      <button class="speed-btn" data-speed="3">3x</button>
+    </div>
+    <div class="header-actions">
+      <button id="btn-save" class="btn">SAVE</button>
+      <button id="btn-load" class="btn">LOAD</button>
+      <button id="btn-settings" class="btn" aria-label="Settings">⚙</button>
+    </div>
+  </header>
+
+  <!-- Main game area -->
+  <div class="game-container">
+    <!-- Canvas area -->
+    <div class="canvas-wrap">
+      <canvas id="game" width="960" height="720"></canvas>
+      <!-- Context menu for objects -->
+      <div id="context-menu" class="context-menu" style="display:none;" role="menu" aria-hidden="true"></div>
+      <!-- Placement preview -->
+      <div id="placement-preview" class="placement-preview" style="display:none;" aria-hidden="true"></div>
+    </div>
+
+    <!-- Right sidebar: HUD panels -->
+    <aside class="sidebar" id="sidebar">
+      <!-- Sim selector tabs (for multiple sims) -->
+      <div class="sim-tabs" id="sim-tabs"></div>
+
+      <!-- Selected sim info -->
+      <div class="panel" id="panel-info">
+        <h3 id="sim-name">Select a Sim</h3>
+        <div id="sim-mood" class="mood">—</div>
+        <div id="sim-details"></div>
+      </div>
+
+      <!-- Need bars -->
+      <div class="panel" id="panel-needs">
+        <h3>Needs</h3>
+        <div id="need-bars">
+          <div class="need-bar" data-need="hunger">
+            <span class="need-label">Hunger</span>
+            <div class="bar"><span></span></div>
+            <span class="need-value">—</span>
+          </div>
+          <div class="need-bar" data-need="energy">
+            <span class="need-label">Energy</span>
+            <div class="bar"><span></span></div>
+            <span class="need-value">—</span>
+          </div>
+          <div class="need-bar" data-need="bladder">
+            <span class="need-label">Bladder</span>
+            <div class="bar"><span></span></div>
+            <span class="need-value">—</span>
+          </div>
+          <div class="need-bar" data-need="hygiene">
+            <span class="need-label">Hygiene</span>
+            <div class="bar"><span></span></div>
+            <span class="need-value">—</span>
+          </div>
+          <div class="need-bar" data-need="social">
+            <span class="need-label">Social</span>
+            <div class="bar"><span></span></div>
+            <span class="need-value">—</span>
+          </div>
+          <div class="need-bar" data-need="fun">
+            <span class="need-label">Fun</span>
+            <div class="bar"><span></span></div>
+            <span class="need-value">—</span>
+          </div>
+          <div class="need-bar" data-need="comfort">
+            <span class="need-label">Comfort</span>
+            <div class="bar"><span></span></div>
+            <span class="need-value">—</span>
+          </div>
+          <div class="need-bar" data-need="environment">
+            <span class="need-label">Environment</span>
+            <div class="bar"><span></span></div>
+            <span class="need-value">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Task queue -->
+      <div class="panel" id="panel-queue">
+        <h3>Queue <button id="clear-queue" class="mini-btn">Clear</button></h3>
+        <ul id="queue-list"><li class="empty">No tasks</li></ul>
+      </div>
+
+      <!-- Panel tabs for Skills/Relationships/Career -->
+      <div class="panel-tabs">
+        <button class="panel-tab active" data-panel="skills">Skills</button>
+        <button class="panel-tab" data-panel="relationships">Relations</button>
+        <button class="panel-tab" data-panel="career">Career</button>
+      </div>
+
+      <div class="panel" id="panel-skills">
+        <div id="skill-bars"></div>
+      </div>
+
+      <div class="panel" id="panel-relationships" style="display:none;">
+        <div id="relationship-list"></div>
+      </div>
+
+      <div class="panel" id="panel-career" style="display:none;">
+        <div id="career-info"></div>
+      </div>
+
+      <!-- Time & Funds -->
+      <div class="panel panel-status">
+        <div class="status-grid">
+          <span class="status-label">Time</span><span id="status-time" class="status-value">08:00</span>
+          <span class="status-label">Day</span><span id="status-day" class="status-value">Mon 1</span>
+          <span class="status-label">Season</span><span id="status-season" class="status-value">Spring</span>
+          <span class="status-label">Funds</span><span id="status-funds" class="status-value">§20,000</span>
+          <span class="status-label">Bills</span><span id="status-bills" class="status-value">§150/day</span>
+        </div>
+      </div>
+
+      <!-- Event log -->
+      <div class="panel" id="panel-log">
+        <h3>Event Log</h3>
+        <ul id="event-log"></ul>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Build/Buy sidebar (hidden in live mode) -->
+  <aside class="sidebar build-sidebar" id="build-sidebar" style="display:none;" aria-hidden="true">
+    <div class="panel">
+      <h3>Build Tools</h3>
+      <div class="tool-grid">
+        <button class="tool-btn" data-tool="wall">Wall</button>
+        <button class="tool-btn" data-tool="floor">Floor</button>
+        <button class="tool-btn" data-tool="door">Door</button>
+        <button class="tool-btn" data-tool="bulldoze">Bulldoze</button>
+      </div>
+    </div>
+  </aside>
+
+  <aside class="sidebar buy-sidebar" id="buy-sidebar" style="display:none;" aria-hidden="true">
+    <div class="panel">
+      <h3>Buy Catalog</h3>
+      <div class="catalog-categories">
+        <button class="cat-btn active" data-cat="all">All</button>
+        <button class="cat-btn" data-cat="sleep">Sleep</button>
+        <button class="cat-btn" data-cat="hunger">Hunger</button>
+        <button class="cat-btn" data-cat="bladder">Bladder</button>
+        <button class="cat-btn" data-cat="hygiene">Hygiene</button>
+        <button class="cat-btn" data-cat="comfort">Comfort</button>
+        <button class="cat-btn" data-cat="fun">Fun</button>
+        <button class="cat-btn" data-cat="environment">Decor</button>
+      </div>
+      <div id="catalog-grid" class="catalog-grid"></div>
+    </div>
+  </aside>
+
+  <!-- Notifications container -->
+  <div id="notifications" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- Settings modal -->
+  <div id="settings-modal" class="modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="settings-title" aria-hidden="true">
+    <div class="modal-content">
+      <h2 id="settings-title">Settings</h2>
+      <label>Auto-save: <input type="checkbox" id="setting-autosave" checked /></label>
+      <label>Auto-save interval:
+        <select id="setting-interval">
+          <option>1 min</option>
+          <option selected>5 min</option>
+          <option>10 min</option>
+        </select>
+      </label>
+      <div class="modal-actions">
+        <button id="btn-reset-save" class="btn danger">Delete Save</button>
+        <button id="btn-close-settings" class="btn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Module scripts (ORDER IS CRITICAL) -->
+  <script src="engine.js"></script>
+  <script src="sim.js"></script>
+  <script src="world.js"></script>
+  <script src="economy.js"></script>
+  <script src="social.js"></script>
+  <script src="ai.js"></script>
+  <script src="renderer.js"></script>
+  <script src="ui.js"></script>
+  <script src="save.js"></script>
+  <script src="init.js"></script>
+</body>
+</html>
