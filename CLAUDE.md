@@ -6,18 +6,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **YMER** - The Giant and the old Mother Cow
 
-This is an early-stage project. Currently the repository contains only a README with the project title and description. Future development will expand the codebase and architecture.
+This repository hosts the **BASE Compute Fabric** (v0.2): a broker that routes client compute jobs (CPU, GPU, specialist) through self-service and human-expert entry points to internal and external compute providers, with cost/usage/evidence ledgers underneath. See `compute-fabric/README.md` for the module map and build-order status (P0–P4).
 
 ## Repository Structure
 
 ```
 YMER/
-├── README.md           # Project overview
-├── CLAUDE.md          # This file - guidance for Claude Code
-└── .git/              # Git repository metadata
+├── README.md              # Project overview
+├── CLAUDE.md              # This file - guidance for Claude Code
+├── compute-fabric/        # BASE Compute Fabric P0 scaffold
+│   ├── schema/             # ComputeUnit, Job dataclasses
+│   ├── providers/          # Provider ABC + LocalProvider stub
+│   ├── registry/           # CapabilityRegistry
+│   ├── costing/            # CostLedger (atomic per-job cost records)
+│   ├── meter/               # Meter (atomic per-job usage records)
+│   ├── evidence/            # EvidenceLedger + atomic write helper
+│   ├── tests/               # pytest suite for all of the above
+│   └── README.md
+└── .git/                  # Git repository metadata
 ```
 
-As the project evolves, this structure will expand based on the type of application being built (web app, CLI tool, library, etc.).
+As the project evolves (P1: real providers/KAM estimator, P2: GPU/MRR/Render adapters, P3: MARKOFF front end, P4: settlement), this structure will expand accordingly.
 
 ## Git Workflow
 
@@ -43,13 +52,10 @@ Commit messages should be clear and concise:
 
 ## Development Setup
 
-As the project matures, this section will be expanded with:
-- Required dependencies and versions
-- Environment setup instructions
-- Commands to build, test, and run the application
-- Linting and code formatting requirements
-
-Currently, there are no build or test dependencies configured.
+- **Language**: Python 3.11+ (standard library only for P0; no external runtime dependencies).
+- **Test dependency**: `pytest` (`pip install pytest`).
+- **Run tests**: `python3 -m pytest compute-fabric/tests/ -v` from the repo root.
+- No build step; modules under `compute-fabric/` are imported directly (tests add the `compute-fabric/` directory to `sys.path` via `conftest.py`, since it's a hyphenated directory name, not an importable package).
 
 ## Code Conventions
 
