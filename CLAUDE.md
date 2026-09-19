@@ -14,19 +14,32 @@ This repository hosts the **BASE Compute Fabric** (v0.2): a broker that routes c
 YMER/
 ├── README.md              # Project overview
 ├── CLAUDE.md              # This file - guidance for Claude Code
-├── compute-fabric/        # BASE Compute Fabric P0 scaffold
-│   ├── schema/             # ComputeUnit, Job dataclasses
-│   ├── providers/          # Provider ABC + LocalProvider stub
-│   ├── registry/           # CapabilityRegistry
-│   ├── costing/            # CostLedger (atomic per-job cost records)
-│   ├── meter/               # Meter (atomic per-job usage records)
+├── compute-fabric/        # BASE Compute Fabric (P0 + P1)
+│   ├── schema/             # Capability, ComputeUnit, Job dataclasses
+│   ├── providers/          # Provider ABC + local/llama.cpp/HF/node adapters
+│   ├── registry/           # CapabilityRegistry (lane + enabled enforcement)
+│   ├── quoting/            # PricingPolicy, Public/InternalQuote, QuoteGenerator
+│   ├── kam/                 # KamEstimator
+│   ├── costing/            # CostLedger (append-only cost records)
+│   ├── meter/               # Meter (append-only usage records)
 │   ├── evidence/            # EvidenceLedger + atomic write helper
 │   ├── tests/               # pytest suite for all of the above
 │   └── README.md
 └── .git/                  # Git repository metadata
 ```
 
-As the project evolves (P1: real providers/KAM estimator, P2: GPU/MRR/Render adapters, P3: MARKOFF front end, P4: settlement), this structure will expand accordingly.
+As the project evolves (P2: GPU/MRR/Render adapters, P3: MARKOFF front end, P4: settlement), this structure will expand accordingly.
+
+## Invariants
+
+Three rules hold across the fabric; `compute-fabric/README.md` has the detail.
+
+1. **A job payload is untrusted.** Never turn it into a command line or a
+   filesystem path. Select from an operator-registered allowlist instead.
+2. **`PublicQuote` never gains a cost, margin or provider field.** The spec §4
+   barrier is enforced by the type, not by filtering at the edge.
+3. **A gated adapter stays gated.** `huggingface` and `remote_node` are disabled
+   and unverified; enabling either is a compliance decision, not a config tweak.
 
 ## Git Workflow
 
