@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from .capability import Capability
 from .compute_unit import ComputeUnit
 
 UTC = dt.timezone.utc
@@ -35,41 +36,47 @@ class JobStatus(str, Enum):
 @dataclass(frozen=True)
 class Job:
     requirements: ComputeUnit
-    capability: str  # e.g. "cpu", "render", "hashrate"
+    capability: Capability
     id: str = field(default_factory=lambda: uuid.uuid4().hex)
     status: JobStatus = JobStatus.PENDING
     created_at: str = field(default_factory=lambda: dt.datetime.now(UTC).isoformat())
+    payload: dict[str, Any] = field(default_factory=dict)
+    """Provider-specific parameters. Treated as untrusted client input: a
+    provider must never turn it into a command line or a filesystem path."""
 
     def __post_init__(self) -> None:
         validate_job_id(self.id)
         if not isinstance(self.requirements, ComputeUnit):
             raise ValueError("requirements must be a ComputeUnit")
-        if not isinstance(self.capability, str) or not self.capability:
-            raise ValueError("capability must be a non-empty string")
         if not isinstance(self.status, JobStatus):
             raise ValueError("status must be a JobStatus")
+        if not isinstance(self.payload, dict):
+            raise ValueError("payload must be a dict")
+        object.__setattr__(self, "capability", Capability(self.capability))
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "requirements": self.requirements.to_dict(),
-            "capability": self.capability,
+            "capability": self.capability.value,
             "status": self.status.value,
             "created_at": self.created_at,
+            "payload": self.payload,
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Job":
-        known = {"id", "requirements", "capability", "status", "created_at"}
+        known = {"id", "requirements", "capability", "status", "created_at", "payload"}
         unexpected = set(data) - known
         if unexpected:
             raise ValueError(f"unexpected Job fields: {sorted(unexpected)}")
         return cls(
             id=data["id"],
             requirements=ComputeUnit.from_dict(data["requirements"]),
-            capability=data["capability"],
+            capability=Capability(data["capability"]),
             status=JobStatus(data["status"]),
             created_at=data["created_at"],
+            payload=data.get("payload", {}),
         )
 
     def with_status(self, status: JobStatus) -> "Job":
@@ -79,4 +86,5 @@ class Job:
             capability=self.capability,
             status=status,
             created_at=self.created_at,
+            payload=self.payload,
         )

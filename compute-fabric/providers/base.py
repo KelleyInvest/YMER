@@ -6,6 +6,7 @@ from __future__ import annotations
 import abc
 from dataclasses import dataclass
 
+from schema.capability import ALL_CAPABILITIES, Capability
 from schema.compute_unit import ComputeUnit
 from schema.job import Job
 
@@ -21,9 +22,20 @@ class Provider(abc.ABC):
 
     provider_id: str
 
+    lane: frozenset[Capability] = ALL_CAPABILITIES
+    """The capabilities this provider is permitted to serve. Narrowing it is how
+    spec section 6's 'MRR is a hashrate lane, not a generic GPU/render/AI lane'
+    becomes mechanical: the registry rejects any provider advertising outside
+    its lane."""
+
+    enabled: bool = True
+    """Adapters that need a commercial or compliance precondition before going
+    live (MRR business-use confirmation, an HF token, a job-dispatch channel to
+    a node) ship disabled and are turned on explicitly."""
+
     @abc.abstractmethod
-    def capabilities(self) -> dict[str, ComputeUnit]:
-        """Return {capability_tag: max available ComputeUnit} for this provider."""
+    def capabilities(self) -> dict[Capability, ComputeUnit]:
+        """Return {capability: max available ComputeUnit} for this provider."""
 
     @abc.abstractmethod
     def submit(self, job: Job) -> JobHandle:
