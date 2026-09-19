@@ -7,9 +7,10 @@ No live provider integrations yet — schemas and interfaces only.
 
 | Module | Purpose |
 |---|---|
-| `schema/` | `Capability` (closed enum), `ComputeUnit`, `Job` — typed, validated, JSON-serializable |
-| `providers/` | `Provider` ABC, `LocalProvider` test double, and the `local_cpu`, `llama_cpp`, `huggingface`, `remote_node` adapters |
+| `schema/` | `Capability`, `Priority`, `ComputeUnit`, `Job` — typed, validated, JSON-serializable |
+| `providers/` | `Provider` ABC, `LocalProvider` test double, the `local_cpu`, `llama_cpp`, `rtm_idle` local adapters, the gated `huggingface`, `remote_node`, `mrr`, `gpu_lease` adapters, and a shared `RateLimiter` |
 | `registry/` | `CapabilityRegistry` — capability lookup, lane enforcement, enabled-only routing |
+| `scheduler/` | `Router` (cheapest-fits selection) and `Scheduler` (priority lanes) |
 | `quoting/` | `PricingPolicy`, `PublicQuote`/`InternalQuote`, `QuoteGenerator` |
 | `kam/` | `KamEstimator` — project sizing, budget bands, recommendation |
 | `costing/` | `CostLedger` — append-only atomic cost records per job |
@@ -20,7 +21,7 @@ No live provider integrations yet — schemas and interfaces only.
 
 - **P0** (this scaffold): registry, schemas, provider abstraction, cost ledger, meter, evidence ledger — done.
 - **P1**: CPU/llama.cpp/HF/node providers, KAM estimator, quote generator — done, with two adapters gated (see below).
-- **P2**: GPU lease, MRR hashrate, Render, RTM idle-compute adapters — not started.
+- **P2**: scheduler and priority lanes, RTM idle-compute, MRR hashrate, GPU/render lease — done, with the external adapters gated. A dedicated Render Network adapter is still outstanding (see below).
 - **P3**: MARKOFF front end, self-service checkout, contracts, CRM — not started.
 - **P4**: settlement (SOL, FREE, supplier rewards, treasury) — not started.
 
@@ -47,10 +48,19 @@ python3 -m pytest        # from the repo root; see pytest.ini
   for upstream cost, margin or provider identity. Do not add one — put it on
   `InternalQuote` instead.
 
+## Priority lanes
+
+Spec §6 orders CPU work BASE → client → PoC → RTM/idle. `Scheduler` dispatches
+in that order, FIFO within a lane, and an unroutable job is skipped rather than
+left blocking the lanes beneath it. Idle-lane work never dispatches while a
+higher lane is waiting, and `RtmIdleProvider` independently refuses anything
+above the idle lane — RTM is a protected lane, but protected means it gets idle
+capacity, not that it competes for paid capacity.
+
 ## Gated adapters
 
-`huggingface` and `remote_node` ship `enabled = False` and are **unverified** —
-neither has been run against its real backend.
+`huggingface`, `remote_node`, `mrr` and `gpu_lease` ship `enabled = False` and
+are **unverified** — none has been run against its real backend.
 
 - **`huggingface`** needs a token (`HF_API_TOKEN`, read per call, never in
   source) and its `base_url` confirmed against current HF docs. Enabling it
@@ -61,3 +71,13 @@ neither has been run against its real backend.
   task execution stays disabled; job dispatch needs its own key and its own
   authorization on the node. The adapter refuses an `ssh_key` named after the
   read-only status key.
+- **`mrr`** needs *two* gates: `enabled` and `business_use_confirmed`. MRR's
+  broker policy permits sourcing and reselling third-party hashrate but requires
+  that upstream providers be accurately informed how it is used — that
+  disclosure is a separate fact from having wired the adapter up, so neither
+  flag implies the other. The documented 100 req/min/IP ceiling is enforced
+  locally rather than discovered through upstream 429s.
+- **`gpu_lease`** is one adapter parameterised by lane (`GPU` or `RENDER`), not
+  a per-vendor family. **The Render Network is not covered by it** — it has its
+  own API and commercial terms and needs a dedicated adapter once we have
+  access. Do not rename a `gpu_lease` instance and call it done.

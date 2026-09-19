@@ -10,6 +10,7 @@ from typing import Any
 
 from .capability import Capability
 from .compute_unit import ComputeUnit
+from .priority import Priority
 
 UTC = dt.timezone.utc
 
@@ -39,6 +40,7 @@ class Job:
     capability: Capability
     id: str = field(default_factory=lambda: uuid.uuid4().hex)
     status: JobStatus = JobStatus.PENDING
+    priority: Priority = Priority.CLIENT
     created_at: str = field(default_factory=lambda: dt.datetime.now(UTC).isoformat())
     payload: dict[str, Any] = field(default_factory=dict)
     """Provider-specific parameters. Treated as untrusted client input: a
@@ -53,6 +55,7 @@ class Job:
         if not isinstance(self.payload, dict):
             raise ValueError("payload must be a dict")
         object.__setattr__(self, "capability", Capability(self.capability))
+        object.__setattr__(self, "priority", Priority(self.priority))
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -60,13 +63,22 @@ class Job:
             "requirements": self.requirements.to_dict(),
             "capability": self.capability.value,
             "status": self.status.value,
+            "priority": self.priority.value,
             "created_at": self.created_at,
             "payload": self.payload,
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Job":
-        known = {"id", "requirements", "capability", "status", "created_at", "payload"}
+        known = {
+            "id",
+            "requirements",
+            "capability",
+            "status",
+            "priority",
+            "created_at",
+            "payload",
+        }
         unexpected = set(data) - known
         if unexpected:
             raise ValueError(f"unexpected Job fields: {sorted(unexpected)}")
@@ -75,6 +87,7 @@ class Job:
             requirements=ComputeUnit.from_dict(data["requirements"]),
             capability=Capability(data["capability"]),
             status=JobStatus(data["status"]),
+            priority=Priority(data.get("priority", Priority.CLIENT)),
             created_at=data["created_at"],
             payload=data.get("payload", {}),
         )
@@ -85,6 +98,7 @@ class Job:
             requirements=self.requirements,
             capability=self.capability,
             status=status,
+            priority=self.priority,
             created_at=self.created_at,
             payload=self.payload,
         )
