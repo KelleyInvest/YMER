@@ -10,8 +10,8 @@ No live provider integrations yet — schemas and interfaces only.
 | `schema/` | `ComputeUnit`, `Job` — typed, validated, JSON-serializable |
 | `providers/` | `Provider` ABC + `LocalProvider` in-process stub |
 | `registry/` | `CapabilityRegistry` — provider/capability lookup |
-| `costing/` | `CostLedger` — atomic per-job cost records |
-| `meter/` | `Meter` — atomic per-job usage records |
+| `costing/` | `CostLedger` — append-only atomic cost records per job |
+| `meter/` | `Meter` — append-only atomic usage records per job |
 | `evidence/` | `EvidenceLedger` — append-only atomic event log; `_atomic.py` write-then-rename helper |
 
 ## Status
@@ -25,5 +25,13 @@ No live provider integrations yet — schemas and interfaces only.
 ## Running tests
 
 ```bash
-python3 -m pytest compute-fabric/tests/ -v
+python3 -m pytest        # from the repo root; see pytest.ini
 ```
+
+## Conventions
+
+- Job ids become ledger directory names, so they are restricted to
+  `[A-Za-z0-9_-]{1,128}` (`schema/job.py:validate_job_id`). Anything reading
+  a job id from outside the fabric must pass it through that check.
+- Cost and meter records are append-only: `record_*` never overwrites, and
+  `history()` returns every record while `get_*` returns the latest.

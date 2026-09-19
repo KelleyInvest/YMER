@@ -39,3 +39,10 @@ def test_registry_providers_for():
     registry.register(provider)
     assert registry.providers_for("cpu") == [provider]
     assert registry.providers_for("render") == []
+
+
+def test_registry_rejects_duplicate_registration():
+    registry = CapabilityRegistry()
+    registry.register(LocalProvider())
+    with pytest.raises(ValueError):
+        registry.register(LocalProvider())

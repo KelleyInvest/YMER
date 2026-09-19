@@ -18,20 +18,23 @@ class CapabilityEntry:
 
 class CapabilityRegistry:
     def __init__(self) -> None:
-        self._entries: list[CapabilityEntry] = []
+        self._by_capability: dict[str, list[CapabilityEntry]] = {}
+        self._provider_ids: set[str] = set()
 
     def register(self, provider: Provider) -> None:
+        if provider.provider_id in self._provider_ids:
+            raise ValueError(f"provider already registered: {provider.provider_id}")
+        self._provider_ids.add(provider.provider_id)
         for capability, capacity in provider.capabilities().items():
-            self._entries.append(
-                CapabilityEntry(provider=provider, capability=capability, capacity=capacity)
-            )
+            entry = CapabilityEntry(provider=provider, capability=capability, capacity=capacity)
+            self._by_capability.setdefault(capability, []).append(entry)
 
     def lookup(self, capability: str, requirements: ComputeUnit) -> list[Provider]:
         return [
             entry.provider
-            for entry in self._entries
-            if entry.capability == capability and requirements.fits_within(entry.capacity)
+            for entry in self._by_capability.get(capability, ())
+            if requirements.fits_within(entry.capacity)
         ]
 
     def providers_for(self, capability: str) -> list[Provider]:
-        return [entry.provider for entry in self._entries if entry.capability == capability]
+        return [entry.provider for entry in self._by_capability.get(capability, ())]

@@ -2,7 +2,7 @@
 provider capability descriptors, and job requirements (spec section 3)."""
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from typing import Any
 
 
@@ -24,12 +24,18 @@ class ComputeUnit:
             raise ValueError("gpu must be a non-negative int")
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        return {
+            "cpu": self.cpu,
+            "ram": self.ram,
+            "gpu": self.gpu,
+            "vram": self.vram,
+            "storage": self.storage,
+            "bandwidth": self.bandwidth,
+        }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "ComputeUnit":
-        known = {f.name for f in cls.__dataclass_fields__.values()}
-        unexpected = set(data) - known
+        unexpected = set(data) - set(cls.__dataclass_fields__)
         if unexpected:
             raise ValueError(f"unexpected ComputeUnit fields: {sorted(unexpected)}")
         return cls(**data)

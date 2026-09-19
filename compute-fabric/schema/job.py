@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import re
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
@@ -10,6 +11,17 @@ from typing import Any
 from .compute_unit import ComputeUnit
 
 UTC = dt.timezone.utc
+
+_JOB_ID_PATTERN = re.compile(r"\A[A-Za-z0-9_-]{1,128}\Z")
+
+
+def validate_job_id(job_id: str) -> str:
+    """Job ids are used as ledger filenames, so they must be a safe path
+    component: anything containing a separator or '..' would let a record
+    escape its ledger root."""
+    if not isinstance(job_id, str) or not _JOB_ID_PATTERN.match(job_id):
+        raise ValueError(f"invalid job id: {job_id!r}")
+    return job_id
 
 
 class JobStatus(str, Enum):
@@ -29,6 +41,7 @@ class Job:
     created_at: str = field(default_factory=lambda: dt.datetime.now(UTC).isoformat())
 
     def __post_init__(self) -> None:
+        validate_job_id(self.id)
         if not isinstance(self.requirements, ComputeUnit):
             raise ValueError("requirements must be a ComputeUnit")
         if not isinstance(self.capability, str) or not self.capability:

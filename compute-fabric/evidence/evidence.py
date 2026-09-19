@@ -4,6 +4,7 @@ reading, ...), for later audit."""
 from __future__ import annotations
 
 import datetime as dt
+import json
 import uuid
 from pathlib import Path
 from typing import Any
@@ -31,8 +32,6 @@ class EvidenceLedger:
         return path
 
     def all_events(self) -> list[dict[str, Any]]:
-        import json
-
         return [
             json.loads(path.read_bytes())
             for path in sorted(self._root.glob("*.json"))

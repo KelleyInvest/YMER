@@ -22,6 +22,12 @@ def test_rejects_empty_capability():
         make_job(capability="")
 
 
+@pytest.mark.parametrize("bad_id", ["", "../../pwned", "a/b", "with space", "x" * 129])
+def test_rejects_unsafe_id(bad_id):
+    with pytest.raises(ValueError):
+        make_job(id=bad_id)
+
+
 def test_round_trip_dict():
     job = make_job()
     assert Job.from_dict(job.to_dict()) == job
