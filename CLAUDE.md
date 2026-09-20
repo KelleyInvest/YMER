@@ -14,13 +14,16 @@ This repository hosts the **BASE Compute Fabric** (v0.2): a broker that routes c
 YMER/
 ├── README.md              # Project overview
 ├── CLAUDE.md              # This file - guidance for Claude Code
-├── compute-fabric/        # BASE Compute Fabric (P0 + P1 + P2)
+├── compute-fabric/        # BASE Compute Fabric (P0 + P1 + P2 + P3)
 │   ├── schema/             # Capability, Priority, ComputeUnit, Job dataclasses
 │   ├── providers/          # Provider ABC + local/llama.cpp/RTM/HF/node/MRR/GPU adapters
 │   ├── registry/           # CapabilityRegistry (lane + enabled enforcement)
 │   ├── scheduler/          # Router (cheapest-fits) + Scheduler (priority lanes)
 │   ├── quoting/            # PricingPolicy, Public/InternalQuote, QuoteGenerator
 │   ├── kam/                 # KamEstimator
+│   ├── markoff/            # Product classes + public front desk
+│   ├── contracts/          # Lease terms model + packages
+│   ├── sales/               # Checkout (payment port) + lead pipeline
 │   ├── costing/            # CostLedger (append-only cost records)
 │   ├── meter/               # Meter (append-only usage records)
 │   ├── evidence/            # EvidenceLedger + atomic write helper
@@ -29,22 +32,26 @@ YMER/
 └── .git/                  # Git repository metadata
 ```
 
-As the project evolves (P3: MARKOFF front end, P4: settlement), this structure will expand accordingly.
+P4 (settlement) is not started and needs legal input before code — see `compute-fabric/README.md`.
 
 ## Invariants
 
-Three rules hold across the fabric; `compute-fabric/README.md` has the detail.
+Five rules hold across the fabric; `compute-fabric/README.md` has the detail.
 
 1. **A job payload is untrusted.** Never turn it into a command line or a
    filesystem path. Select from an operator-registered allowlist instead.
-2. **`PublicQuote` never gains a cost, margin or provider field.** The spec §4
-   barrier is enforced by the type, not by filtering at the edge.
+2. **`PublicQuote` and `PublicOffer` never gain a cost, margin or provider
+   field.** The spec §4 barrier is enforced by the type, not by filtering at the
+   edge.
 3. **A gated adapter stays gated.** `huggingface`, `remote_node`, `mrr` and
    `gpu_lease` are disabled and unverified; enabling any of them is a compliance
    decision, not a config tweak.
 4. **Idle-lane work never takes paid capacity.** The scheduler dispatches BASE →
    client → PoC → idle, and `RtmIdleProvider` refuses anything above the idle
    lane. Both checks stay: the failure is a revenue loss that would be silent.
+5. **Card data never enters this repository.** Checkout holds a processor
+   reference and nothing else. Adding a PAN/CVV/expiry field pulls the whole
+   codebase into PCI scope; make that decision deliberately or not at all.
 
 ## Git Workflow
 

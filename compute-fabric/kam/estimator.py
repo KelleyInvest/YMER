@@ -81,6 +81,10 @@ class KamEstimator:
         self._generator = generator or QuoteGenerator()
         self._thresholds = thresholds or SizingThresholds()
 
+    @property
+    def currency(self) -> str:
+        return self._generator.policy.currency
+
     def estimate(self, project: ProjectInput, provider: Provider) -> Estimate:
         thresholds = self._thresholds
         peak_requirements = _scale(project.per_job, project.peak_concurrency, project.storage_gb)
@@ -120,7 +124,7 @@ class KamEstimator:
             budget=budget,
             migration_trigger=(
                 f"expected monthly spend above {thresholds.dedicated_monthly_cost:.0f} "
-                f"{self._generator.policy.currency}, or sustained peak at capacity"
+                f"{self.currency}, or sustained peak at capacity"
             ),
             risk="capacity" if unserviceable else "low",
             recommendation=self._recommendation(project, expected, thresholds, unserviceable),

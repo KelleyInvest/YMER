@@ -13,6 +13,9 @@ No live provider integrations yet — schemas and interfaces only.
 | `scheduler/` | `Router` (cheapest-fits selection) and `Scheduler` (priority lanes) |
 | `quoting/` | `PricingPolicy`, `PublicQuote`/`InternalQuote`, `QuoteGenerator` |
 | `kam/` | `KamEstimator` — project sizing, budget bands, recommendation |
+| `markoff/` | Product classes and the public front desk (`PublicOffer`, next step) |
+| `contracts/` | `LeaseContract` terms model and supporter/subscription `Package`s |
+| `sales/` | `Checkout` with a payment-processor port, and the §9 lead pipeline |
 | `costing/` | `CostLedger` — append-only atomic cost records per job |
 | `meter/` | `Meter` — append-only atomic usage records per job |
 | `evidence/` | `EvidenceLedger` — append-only atomic event log; `_atomic.py` write-then-rename helper |
@@ -22,7 +25,7 @@ No live provider integrations yet — schemas and interfaces only.
 - **P0** (this scaffold): registry, schemas, provider abstraction, cost ledger, meter, evidence ledger — done.
 - **P1**: CPU/llama.cpp/HF/node providers, KAM estimator, quote generator — done, with two adapters gated (see below).
 - **P2**: scheduler and priority lanes, RTM idle-compute, MRR hashrate, GPU/render lease — done, with the external adapters gated. A dedicated Render Network adapter is still outstanding (see below).
-- **P3**: MARKOFF front end, self-service checkout, contracts, CRM — not started.
+- **P3**: MARKOFF front desk, checkout, lease terms, packages, sales pipeline — server-side logic done. No web UI and no live payment integration (see below).
 - **P4**: settlement (SOL, FREE, supplier rewards, treasury) — not started.
 
 ## Running tests
@@ -44,9 +47,31 @@ python3 -m pytest        # from the repo root; see pytest.ini
 - Providers declare a `lane` and the registry rejects anything advertised
   outside it — this is how spec §6's "MRR is hashrate, not generic GPU/render/AI"
   is enforced. `lookup()` returns only `enabled` providers.
-- The client/broker barrier (spec §4) is structural: `PublicQuote` has no field
-  for upstream cost, margin or provider identity. Do not add one — put it on
-  `InternalQuote` instead.
+- The client/broker barrier (spec §4) is structural: `PublicQuote` and
+  `PublicOffer` have no field for upstream cost, margin or provider identity.
+  Do not add one — put it on `InternalQuote` or the internal `Estimate` instead.
+- **Card data never enters this repository.** `sales/checkout.py` takes an
+  authorization token the customer's browser got from the processor directly,
+  and stores only the processor's opaque reference. Adding a PAN, CVV or expiry
+  field pulls this codebase, its logs and its backups into PCI scope — that is a
+  deliberate decision, not an implementation detail. A test asserts `Order` has
+  no such field.
+
+## What P3 does not include
+
+- **No web UI.** `markoff/` is the server-side offer logic a front end would
+  call. Adding a web framework is a separate decision; this repo currently has
+  no runtime dependencies.
+- **No live payment processor.** `PaymentProcessor` is an abstract port with a
+  stub in the tests. Choosing and integrating a processor is outstanding.
+- **`contracts/lease.py` is not legal text.** It encodes spec §5's intent so the
+  fabric can enforce the operational parts (price cap, approval for irreversible
+  changes, export guarantee). The binding agreement is drafted and reviewed by
+  counsel, and where the two disagree the signed agreement governs.
+- **P4 settlement is not started and should not be started casually.** SOL
+  settlement plus FREE Points/Meme tokens is financial-regulation territory;
+  Norway is in the EEA so MiCA is in scope, and holding client funds in treasury
+  reserves is a regulated activity in many jurisdictions. Get counsel before code.
 
 ## Priority lanes
 
