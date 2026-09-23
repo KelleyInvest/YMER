@@ -16,6 +16,7 @@ No live provider integrations yet — schemas and interfaces only.
 | `markoff/` | Product classes and the public front desk (`PublicOffer`, next step) |
 | `contracts/` | `LeaseContract` terms model and supporter/subscription `Package`s |
 | `sales/` | `Checkout` with a payment-processor port, and the §9 lead pipeline |
+| `treasury/` | Reward accrual, FREE Points, treasury controls, settlement port |
 | `costing/` | `CostLedger` — append-only atomic cost records per job |
 | `meter/` | `Meter` — append-only atomic usage records per job |
 | `evidence/` | `EvidenceLedger` — append-only atomic event log; `_atomic.py` write-then-rename helper |
@@ -26,7 +27,7 @@ No live provider integrations yet — schemas and interfaces only.
 - **P1**: CPU/llama.cpp/HF/node providers, KAM estimator, quote generator — done, with two adapters gated (see below).
 - **P2**: scheduler and priority lanes, RTM idle-compute, MRR hashrate, GPU/render lease — done, with the external adapters gated. A dedicated Render Network adapter is still outstanding (see below).
 - **P3**: MARKOFF front desk, checkout, lease terms, packages, sales pipeline — server-side logic done. No web UI and no live payment integration (see below).
-- **P4**: settlement (SOL, FREE, supplier rewards, treasury) — not started.
+- **P4**: accounting layer done (supplier/referral accrual, FREE Points, treasury controls, settlement port). **No payment rail and no token** — see below.
 
 ## Running tests
 
@@ -68,10 +69,27 @@ python3 -m pytest        # from the repo root; see pytest.ini
   fabric can enforce the operational parts (price cap, approval for irreversible
   changes, export guarantee). The binding agreement is drafted and reviewed by
   counsel, and where the two disagree the signed agreement governs.
-- **P4 settlement is not started and should not be started casually.** SOL
-  settlement plus FREE Points/Meme tokens is financial-regulation territory;
-  Norway is in the EEA so MiCA is in scope, and holding client funds in treasury
-  reserves is a regulated activity in many jurisdictions. Get counsel before code.
+- **No payment rail and no token.** P4's accounting layer is built; the parts
+  that move value or issue an instrument are not, and should not be added
+  casually. Norway is in the EEA, so MiCA is in scope for a transferable token,
+  and holding client funds in treasury reserves is a regulated activity in many
+  jurisdictions. Get counsel before code. Specifically absent:
+  - **No SOL or other crypto rail.** `SettlementRail` is an abstract port; the
+    only implementation is `LedgerOnlyRail`, which records an obligation as
+    settled in our books and moves nothing. A test imports every treasury module
+    and asserts no other rail exists.
+  - **No FREE Meme token.** Not implemented at all.
+  - **FREE Points are not a token and must stay that way.** No transfer between
+    accounts, no cash-out, minted only against recorded activity. Those three
+    properties are what separate a loyalty balance from a transferable
+    instrument, so a test asserts `transfer`, `redeem_for_cash`, `withdraw` and
+    `convert_to_token` do not exist on the ledger. Adding any of them is a
+    regulatory decision, not a feature.
+  - **Accrual is separate from payment.** `RewardLedger` records what is owed;
+    paying it is a `SettlementLedger` action gated by `TreasuryControls`
+    (reserve floor, per-payout and daily ceilings, approval threshold). The
+    books stay correct when a payment fails, and changing rails does not
+    rewrite history.
 
 ## Priority lanes
 

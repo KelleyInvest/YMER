@@ -14,7 +14,7 @@ This repository hosts the **BASE Compute Fabric** (v0.2): a broker that routes c
 YMER/
 ├── README.md              # Project overview
 ├── CLAUDE.md              # This file - guidance for Claude Code
-├── compute-fabric/        # BASE Compute Fabric (P0 + P1 + P2 + P3)
+├── compute-fabric/        # BASE Compute Fabric (P0–P3, plus P4's accounting layer)
 │   ├── schema/             # Capability, Priority, ComputeUnit, Job dataclasses
 │   ├── providers/          # Provider ABC + local/llama.cpp/RTM/HF/node/MRR/GPU adapters
 │   ├── registry/           # CapabilityRegistry (lane + enabled enforcement)
@@ -24,6 +24,7 @@ YMER/
 │   ├── markoff/            # Product classes + public front desk
 │   ├── contracts/          # Lease terms model + packages
 │   ├── sales/               # Checkout (payment port) + lead pipeline
+│   ├── treasury/           # Reward accrual, FREE Points, controls, settlement port
 │   ├── costing/            # CostLedger (append-only cost records)
 │   ├── meter/               # Meter (append-only usage records)
 │   ├── evidence/            # EvidenceLedger + atomic write helper
@@ -32,11 +33,11 @@ YMER/
 └── .git/                  # Git repository metadata
 ```
 
-P4 (settlement) is not started and needs legal input before code — see `compute-fabric/README.md`.
+P4's accounting layer is built. The parts that move value or issue an instrument — a crypto settlement rail, the FREE Meme token — are deliberately absent and need legal input before code. See `compute-fabric/README.md`.
 
 ## Invariants
 
-Five rules hold across the fabric; `compute-fabric/README.md` has the detail.
+Six rules hold across the fabric; `compute-fabric/README.md` has the detail.
 
 1. **A job payload is untrusted.** Never turn it into a command line or a
    filesystem path. Select from an operator-registered allowlist instead.
@@ -52,6 +53,11 @@ Five rules hold across the fabric; `compute-fabric/README.md` has the detail.
 5. **Card data never enters this repository.** Checkout holds a processor
    reference and nothing else. Adding a PAN/CVV/expiry field pulls the whole
    codebase into PCI scope; make that decision deliberately or not at all.
+6. **FREE Points are not a token, and no rail moves value.** No transfer, no
+   cash-out, minted only against recorded activity; `LedgerOnlyRail` is the only
+   settlement rail. Adding a transfer path, a cash-out, or a crypto rail is a
+   regulatory decision (MiCA is in scope in the EEA), not a feature. Tests
+   assert each absence.
 
 ## Git Workflow
 
