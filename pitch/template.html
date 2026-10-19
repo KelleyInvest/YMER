@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sticky Sims — Investor Demo</title>
+<style>
+/* ════════════════════════════════════════════════════════════════
+   STICKY SIMS — INVESTOR DEMO
+   Art direction lifted from the product itself: dark instrument
+   panel, cyan accents, monospace readouts. One idea per screen.
+   ════════════════════════════════════════════════════════════════ */
+:root {
+  --bg: #0e131a;
+  --panel: #161d27;
+  --panel-2: #1d2531;
+  --line: #2c3a4d;
+  --ink: #e6edf5;
+  --muted: #8497ab;
+  --cyan: #3dd6d0;
+  --amber: #f5a623;
+  --red: #f2555a;
+  --green: #4ade80;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --chrome-top: 56px;
+  --chrome-bottom: 64px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--ink);
+  font-size: clamp(15px, 1.25vw, 19px);
+  line-height: 1.55;
+}
+::selection { background: rgba(61,214,208,.25); }
+
+/* ── Live game layer (one iframe, always running) ─────────────── */
+#game-layer {
+  position: fixed; inset: 0;
+  z-index: 2;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .45s ease;
+}
+body.game-hook #game-layer,
+body.game-full #game-layer { opacity: 1; }
+body.game-full #game-layer { pointer-events: auto; }
+#game-frame-wrap {
+  position: absolute; top: 0; left: 0;
+  width: 1280px; height: 800px;
+  transform-origin: top left;
+}
+body.game-full #game-frame-wrap {
+  outline: 1px solid var(--line);
+  box-shadow: 0 24px 80px rgba(0,0,0,.55);
+  border-radius: 6px;
+  overflow: hidden;
+}
+#game-frame { width: 100%; height: 100%; border: 0; display: block; background: var(--bg); }
+body.game-hook #game-frame-wrap { border-radius: 0; outline: none; box-shadow: none; }
+
+/* ── Slides ───────────────────────────────────────────────────── */
+.slide {
+  position: fixed;
+  inset: var(--chrome-top) 0 var(--chrome-bottom) 0;
+  z-index: 3;
+  overflow-y: auto;
+  background: var(--bg);
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity .4s ease, transform .4s ease;
+  visibility: hidden;
+  padding: clamp(16px, 3vh, 44px) clamp(20px, 4.5vw, 84px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.slide.active { opacity: 1; transform: none; visibility: visible; }
+.slide.transparent { background: transparent; pointer-events: none; }
+.slide.transparent > * { pointer-events: auto; }
+@media (prefers-reduced-motion: reduce) {
+  .slide, #game-layer { transition: none; }
+}
+.inner { width: 100%; max-width: 1240px; margin: 0 auto; }
+
+.kicker {
+  font-family: var(--mono);
+  font-size: clamp(11px, .95vw, 14px);
+  letter-spacing: .18em;
+  color: var(--cyan);
+  margin-bottom: clamp(12px, 2.2vh, 26px);
+}
+h1 {
+  font-size: clamp(2.1rem, 5.4vw, 4.8rem);
+  line-height: 1.06;
+  letter-spacing: -0.015em;
+  font-weight: 700;
+  max-width: 22ch;
+}
+.lede {
+  margin-top: clamp(14px, 2.6vh, 30px);
+  font-size: clamp(1.02rem, 1.7vw, 1.45rem);
+  color: var(--muted);
+  max-width: 62ch;
+}
+.lede strong { color: var(--ink); font-weight: 600; }
+
+/* ── HOOK ─────────────────────────────────────────────────────── */
+#s1 { justify-content: flex-end; }
+#hook-vignette {
+  position: fixed; inset: 0; z-index: 2; pointer-events: none;
+  background: linear-gradient(to bottom, rgba(14,19,26,.28) 0%, rgba(14,19,26,.05) 40%, rgba(10,14,20,.88) 88%);
+  opacity: 0; transition: opacity .45s ease;
+}
+body.game-hook #hook-vignette { opacity: 1; }
+#s1 h1 { font-size: clamp(2.6rem, 6.5vw, 6rem); max-width: none; text-shadow: 0 2px 24px rgba(0,0,0,.6); }
+#s1 .hook-caption {
+  margin-top: 18px;
+  font-family: var(--mono);
+  font-size: clamp(12px, 1.15vw, 17px);
+  letter-spacing: .14em;
+  color: var(--cyan);
+  text-shadow: 0 1px 8px rgba(0,0,0,.8);
+}
+#s1 .hook-caption .sep { color: var(--muted); padding: 0 .6em; }
+
+/* ── Terminal panel (problem slide) ───────────────────────────── */
+.term {
+  margin-top: clamp(18px, 3vh, 34px);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: clamp(14px, 2.2vh, 26px) clamp(16px, 2vw, 30px);
+  font-family: var(--mono);
+  font-size: clamp(13px, 1.35vw, 19px);
+  line-height: 2.05;
+}
+.term .cmd { color: var(--ink); }
+.term .cmd::before { content: "> "; color: var(--muted); }
+.term .deny { color: var(--red); font-weight: 600; }
+.term .why { color: var(--muted); }
+.footnote {
+  margin-top: clamp(14px, 2.4vh, 26px);
+  font-family: var(--mono);
+  font-size: clamp(11px, .95vw, 14px);
+  color: var(--muted);
+  line-height: 1.8;
+  max-width: 90ch;
+}
+.footnote b { color: var(--ink); font-weight: 600; }
+
+/* ── Live demo slide ──────────────────────────────────────────── */
+#s3 { justify-content: flex-start; padding-top: 0 !important; padding-bottom: 0 !important; }
+#s3 .demo-head {
+  display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap; max-width: none;
+  background: linear-gradient(to bottom, var(--bg) 0%, var(--bg) 78%, rgba(14,19,26,0) 100%);
+  padding: clamp(14px, 2.6vh, 26px) clamp(20px, 4.5vw, 84px) clamp(22px, 3.4vh, 40px);
+  margin: 0 calc(-1 * clamp(20px, 4.5vw, 84px));
+}
+#s3 h1 { font-size: clamp(1.3rem, 2.4vw, 2.1rem); }
+#s3 .demo-sub { font-family: var(--mono); font-size: clamp(11px, 1vw, 14px); color: var(--muted); letter-spacing: .06em; }
+#s3 .demo-hints {
+  position: fixed; left: 0; right: 0; bottom: calc(var(--chrome-bottom) + 8px);
+  text-align: center;
+  font-family: var(--mono); font-size: clamp(11px, .95vw, 14px);
+  color: var(--muted); letter-spacing: .05em;
+  pointer-events: none;
+  background: linear-gradient(to top, var(--bg) 0%, var(--bg) 55%, rgba(14,19,26,0) 100%);
+  padding: 16px 0 10px;
+}
+#s3 .demo-hints b { color: var(--cyan); font-weight: 600; }
+#btn-restart-sim {
+  font-family: var(--mono); font-size: 12px; letter-spacing: .08em;
+  color: var(--muted); background: var(--panel); border: 1px solid var(--line);
+  border-radius: 6px; padding: 5px 12px; cursor: pointer;
+}
+#btn-restart-sim:hover { color: var(--ink); border-color: var(--muted); }
+
+/* ── Moat panels ──────────────────────────────────────────────── */
+.panels { display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(12px, 1.6vw, 24px); margin-top: clamp(20px, 3.4vh, 40px); }
+@media (max-width: 900px) { .panels { grid-template-columns: 1fr; } }
+.panel-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: clamp(16px, 2.4vh, 30px) clamp(16px, 1.8vw, 28px);
+  display: flex; flex-direction: column; gap: 12px;
+}
+.panel-card h3 { font-size: clamp(1.05rem, 1.6vw, 1.4rem); line-height: 1.25; }
+.panel-card p { color: var(--muted); font-size: clamp(.92rem, 1.25vw, 1.12rem); }
+.panel-card .chip {
+  margin-top: auto;
+  font-family: var(--mono);
+  font-size: clamp(10.5px, .9vw, 13px);
+  color: var(--cyan);
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  letter-spacing: .04em;
+}
+.counterweight {
+  margin-top: clamp(16px, 2.8vh, 30px);
+  color: var(--muted);
+  font-size: clamp(.95rem, 1.3vw, 1.18rem);
+  max-width: 84ch;
+  border-left: 2px solid var(--line);
+  padding-left: 16px;
+}
+
+/* ── Stat tiles (market & proof) ──────────────────────────────── */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: clamp(12px, 1.5vw, 22px); margin-top: clamp(20px, 3.4vh, 40px); }
+.tile {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: clamp(14px, 2.2vh, 26px) clamp(14px, 1.6vw, 24px);
+  display: flex; flex-direction: column; gap: 6px;
+  border-top: 2px solid var(--cyan);
+}
+.tile .label { font-size: clamp(.82rem, 1.05vw, 1rem); color: var(--muted); }
+.tile .value { font-family: var(--mono); font-weight: 700; font-size: clamp(1.9rem, 3.6vw, 3.4rem); line-height: 1.1; color: var(--ink); }
+.tile .source { font-family: var(--mono); font-size: clamp(10px, .85vw, 12.5px); color: var(--muted); margin-top: auto; padding-top: 8px; }
+.tile.gap { border-top-color: var(--amber); border-style: dashed; background: transparent; }
+.tile.gap .value { font-size: clamp(.95rem, 1.4vw, 1.25rem); font-weight: 400; color: var(--amber); line-height: 1.5; }
+.market-note { margin-top: clamp(14px, 2.4vh, 26px); color: var(--muted); font-size: clamp(.95rem, 1.3vw, 1.15rem); max-width: 84ch; }
+.market-note b { color: var(--ink); font-weight: 600; }
+details.sources { margin-top: clamp(12px, 2vh, 20px); font-family: var(--mono); font-size: clamp(10.5px, .9vw, 13px); color: var(--muted); }
+details.sources summary { cursor: pointer; letter-spacing: .1em; color: var(--cyan); user-select: none; }
+details.sources ul { list-style: none; margin-top: 10px; line-height: 1.9; }
+details.sources li { word-break: break-all; }
+details.sources .src-name { color: var(--ink); }
+
+/* ── Founder-input fields (visibly unfilled placeholders) ─────── */
+.fill {
+  display: inline-block;
+  font-family: var(--mono);
+  border: 1px dashed var(--amber);
+  border-radius: 6px;
+  padding: .18em .5em;
+  min-width: 8ch;
+  color: var(--ink);
+  outline: none;
+  cursor: text;
+  background: rgba(245,166,35,.05);
+}
+.fill:empty::before { content: "[[ " attr(data-hint) " ]]"; color: var(--amber); opacity: .95; }
+.fill:focus { border-style: solid; background: rgba(245,166,35,.1); }
+.fill.filled { border: 1px solid var(--line); background: var(--panel-2); }
+.fill-note { font-family: var(--mono); font-size: clamp(10px, .85vw, 12.5px); color: var(--muted); letter-spacing: .05em; }
+
+/* ── Model slide ──────────────────────────────────────────────── */
+.decision-block {
+  margin-top: clamp(18px, 3vh, 34px);
+  border: 1px dashed var(--amber);
+  border-radius: 10px;
+  padding: clamp(16px, 2.6vh, 30px) clamp(16px, 2vw, 30px);
+}
+.decision-block .db-label { font-family: var(--mono); font-size: clamp(10.5px, .9vw, 13px); letter-spacing: .16em; color: var(--amber); margin-bottom: 12px; }
+.decision-block .fill { font-size: clamp(1.1rem, 2.2vw, 1.9rem); width: 100%; }
+.candidates { display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(10px, 1.4vw, 20px); margin-top: clamp(16px, 2.6vh, 30px); }
+@media (max-width: 900px) { .candidates { grid-template-columns: 1fr; } }
+.candidate {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: clamp(12px, 2vh, 22px) clamp(14px, 1.6vw, 24px);
+}
+.candidate .c-tag { font-family: var(--mono); font-size: 10.5px; letter-spacing: .14em; color: var(--muted); margin-bottom: 8px; }
+.candidate h4 { font-size: clamp(.98rem, 1.4vw, 1.2rem); margin-bottom: 6px; }
+.candidate p { color: var(--muted); font-size: clamp(.85rem, 1.1vw, 1rem); }
+.money-line {
+  margin-top: clamp(18px, 3vh, 32px);
+  display: flex; gap: 14px; flex-wrap: wrap; align-items: center;
+  font-size: clamp(1rem, 1.5vw, 1.3rem);
+}
+.money-line .fill { min-width: 14ch; }
+
+/* ── Proof slide ──────────────────────────────────────────────── */
+.gate-line {
+  margin-top: clamp(16px, 2.6vh, 28px);
+  font-family: var(--mono);
+  font-size: clamp(12px, 1.2vw, 16px);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 18px;
+  color: var(--muted);
+}
+.gate-line .ok { color: var(--green); font-weight: 600; }
+.gate-line .cmd-c { color: var(--cyan); }
+.provenance { margin-top: clamp(16px, 2.6vh, 28px); color: var(--muted); font-size: clamp(.95rem, 1.35vw, 1.2rem); max-width: 84ch; }
+.provenance b { color: var(--ink); font-weight: 600; }
+.traction-block { margin-top: clamp(16px, 2.6vh, 28px); }
+.traction-block .fill { font-size: clamp(1.05rem, 1.9vw, 1.6rem); width: 100%; }
+
+/* ── Ask slide ────────────────────────────────────────────────── */
+#s8 { text-align: center; }
+#s8 .inner { max-width: 1000px; }
+#s8 h1 { max-width: none; margin: 0 auto; }
+.ask-amount { margin-top: clamp(20px, 4vh, 44px); }
+.ask-amount .fill { font-size: clamp(2.4rem, 7vw, 6rem); font-weight: 700; min-width: 7ch; }
+.ask-for { font-family: var(--mono); color: var(--muted); letter-spacing: .18em; font-size: clamp(12px, 1.2vw, 16px); margin: clamp(10px, 2vh, 20px) 0; }
+.ask-equity .fill { font-size: clamp(1.8rem, 4.6vw, 3.8rem); font-weight: 700; min-width: 5ch; }
+.funds { margin-top: clamp(24px, 4.5vh, 52px); text-align: left; max-width: 760px; margin-left: auto; margin-right: auto; }
+.funds .f-label { font-family: var(--mono); font-size: clamp(10.5px, .9vw, 13px); letter-spacing: .16em; color: var(--muted); margin-bottom: 12px; text-align: center; }
+.funds .fill { display: block; width: 100%; margin-bottom: 10px; font-size: clamp(.95rem, 1.4vw, 1.25rem); }
+
+/* ── Dragon-proofing ──────────────────────────────────────────── */
+#s9 { justify-content: flex-start; }
+.dragons { margin-top: clamp(14px, 2.4vh, 28px); display: flex; flex-direction: column; gap: 10px; }
+.dq {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.dq > button {
+  all: unset;
+  display: flex; align-items: baseline; gap: 16px;
+  width: 100%;
+  padding: clamp(12px, 2vh, 20px) clamp(16px, 2vw, 26px);
+  cursor: pointer;
+  box-sizing: border-box;
+}
+.dq > button:hover { background: var(--panel-2); }
+.dq > button:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
+.dq .qn { font-family: var(--mono); color: var(--red); font-weight: 700; font-size: clamp(.9rem, 1.2vw, 1.1rem); flex: none; }
+.dq .qt { font-size: clamp(1rem, 1.7vw, 1.45rem); font-weight: 600; line-height: 1.3; }
+.dq .qa {
+  display: none;
+  padding: 0 clamp(16px, 2vw, 26px) clamp(14px, 2.2vh, 24px) calc(clamp(16px, 2vw, 26px) + 2.6em);
+  color: var(--muted);
+  font-size: clamp(.92rem, 1.3vw, 1.15rem);
+  max-width: 100ch;
+}
+.dq .qa b { color: var(--ink); font-weight: 600; }
+.dq.open .qa { display: block; }
+.dq.open > button .qt { color: var(--cyan); }
+.dq .qa .fill { font-size: inherit; }
+
+/* ── Chrome: top telemetry bar ────────────────────────────────── */
+#chrome-top {
+  position: fixed; top: 0; left: 0; right: 0; height: var(--chrome-top);
+  z-index: 50;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 clamp(14px, 2vw, 32px);
+  font-family: var(--mono);
+  font-size: clamp(10px, .9vw, 13px);
+  letter-spacing: .1em;
+  color: var(--muted);
+  background: linear-gradient(to bottom, rgba(14,19,26,.92), rgba(14,19,26,0));
+  pointer-events: none;
+}
+#telemetry { display: flex; gap: 1.8em; white-space: nowrap; }
+#telemetry .t-val { color: var(--ink); }
+#telemetry .t-good { color: var(--green); }
+#telemetry .t-bad { color: var(--red); }
+
+/* ── Chrome: bottom progress rail ─────────────────────────────── */
+#chrome-bottom {
+  position: fixed; bottom: 0; left: 0; right: 0; height: var(--chrome-bottom);
+  z-index: 50;
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+  gap: 16px;
+  padding: 0 clamp(14px, 2vw, 32px);
+  font-family: var(--mono);
+  background: linear-gradient(to top, rgba(14,19,26,.94), rgba(14,19,26,0));
+}
+#key-hints { font-size: clamp(9.5px, .85vw, 12px); letter-spacing: .08em; color: var(--muted); }
+#key-hints b { color: var(--ink); font-weight: 600; }
+#rail-wrap { text-align: center; }
+#rail { display: inline-flex; gap: 6px; }
+#rail button {
+  all: unset; box-sizing: border-box;
+  width: clamp(26px, 3.2vw, 46px); height: 5px;
+  background: var(--line);
+  border-radius: 2px;
+  cursor: pointer;
+}
+#rail button:hover { background: var(--muted); }
+#rail button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+#rail button.done { background: rgba(61,214,208,.35); }
+#rail button.current { background: var(--cyan); }
+#rail-label { margin-top: 7px; font-size: clamp(9.5px, .85vw, 12px); letter-spacing: .16em; color: var(--muted); }
+#rail-label b { color: var(--ink); font-weight: 600; }
+#nav-btns { justify-self: end; display: flex; gap: 8px; }
+#nav-btns button {
+  all: unset; box-sizing: border-box;
+  width: 40px; height: 34px;
+  text-align: center; line-height: 34px;
+  border: 1px solid var(--line); border-radius: 6px;
+  color: var(--muted); font-size: 16px;
+  cursor: pointer; user-select: none;
+}
+#nav-btns button:hover { color: var(--ink); border-color: var(--muted); }
+#nav-btns button:focus-visible { outline: 2px solid var(--cyan); }
+</style>
+</head>
+<body class="game-hidden" data-section="0">
+
+<!-- ══ Live game: one instance, boots at load, never stops ══ -->
+<div id="game-layer">
+  <div id="game-frame-wrap">
+    <iframe id="game-frame" title="Sticky Sims — live simulation"></iframe>
+  </div>
+</div>
+<div id="hook-vignette"></div>
+
+<!-- ══ 1 · HOOK ══ -->
+<section class="slide transparent" id="s1">
+  <div class="inner">
+    <h1>Nobody is playing this game.</h1>
+    <div class="hook-caption">
+      LIVE ON THIS MACHINE<span class="sep">·</span>FOUR SIMS DECIDING FOR THEMSELVES<span class="sep">·</span>NO INTERNET, NO SERVER, NO INSTALL
+    </div>
+  </div>
+</section>
+
+<!-- ══ 2 · THE PROBLEM ══ -->
+<section class="slide" id="s2">
+  <div class="inner">
+    <div class="kicker">02 · THE PROBLEM</div>
+    <h1>Software can teach people risky work safely. It can’t reach them.</h1>
+    <p class="lede">Simulation is how you practise the expensive mistake before it costs anything — the lab induction, the safety drill, the machine you only get one chance to break. But the institutions that need it most run <strong>locked-down machines</strong> that can’t install software, and — increasingly in Europe — <strong>aren’t allowed to touch the cloud</strong>.</p>
+    <div class="term" role="img" aria-label="Three refusals: install denied by device policy, cloud denied by legal, procurement deferred">
+      <div><span class="cmd">install training-simulator.msi</span> &nbsp;<span class="deny">DENIED</span> <span class="why">— managed device. IT policy.</span></div>
+      <div><span class="cmd">open cloud-simulator.io</span> &nbsp;<span class="deny">DENIED</span> <span class="why">— pupil data would leave the EU. Legal says no.¹</span></div>
+      <div><span class="cmd">request procurement review</span> &nbsp;<span class="deny">DEFERRED</span> <span class="why">— no budget line, next cycle.</span></div>
+    </div>
+    <p class="footnote">
+      ¹ In July 2022 the Danish data-protection authority banned a municipality’s schools from using Google Workspace over US data transfers <b>(Datatilsynet, Helsingør ruling — gdprhub.eu)</b>.
+      Meanwhile 50 million students and educators work on Chromebooks <b>(Google, Sept 2024)</b> — machines built to install nothing.
+      Every simulation vendor answers with an install, an account, or a cloud. The buyer’s machine says no to all three.
+    </p>
+  </div>
+</section>
+
+<!-- ══ 3 · THE PRODUCT — LIVE ══ -->
+<section class="slide transparent" id="s3">
+  <div class="demo-head inner">
+    <div class="kicker" style="margin:0">03 · THE PRODUCT — LIVE</div>
+    <h1>Sticky Sims — a full life simulation in one 372&thinsp;KB file. This is it, running.</h1>
+    <button id="btn-restart-sim" title="Reload the simulation">restart sim</button>
+  </div>
+  <div class="demo-hints">click a <b>sim</b> — or a portrait, left — to inspect needs, skills, relationships · keys <b>1–4</b> speed, <b>P</b> pause · do nothing, and they carry on without you</div>
+</section>
+
+<!-- ══ 4 · WHY IT'S HARD TO COPY ══ -->
+<section class="slide" id="s4">
+  <div class="inner">
+    <div class="kicker">04 · WHY THIS IS HARD TO COPY</div>
+    <h1>The moat isn’t the code. It’s where the code can run.</h1>
+    <div class="panels">
+      <div class="panel-card">
+        <h3>It runs where vendors can’t follow</h3>
+        <p>No install, no account, no server, no network call. It doesn’t pass IT review — it never triggers one. A school Chromebook, an air-gapped lab, a USB stick in a secure facility: the same file, double-clicked.</p>
+        <div class="chip">deps 0 · payload 372 KB · network calls 0</div>
+      </div>
+      <div class="panel-card">
+        <h3>Nothing to patch, nothing to approve</h3>
+        <p>Zero dependencies means zero supply chain — no package tree to audit, no framework to fall out of date, no vulnerability feed to watch. Plain JavaScript an institution can read, in full, before running it.</p>
+        <div class="chip">9,512 lines · 10 modules · audit surface: all of it</div>
+      </div>
+      <div class="panel-card">
+        <h3>Discipline a copycat must rediscover</h3>
+        <p>A frozen interface contract and a headless merge gate block regressions automatically. The same gate that verified this build fails the buggy one. Scenarios are data — rooms, objects, careers, schedules are definitions, not code.</p>
+        <div class="chip">INTERFACES.md · harness.js · gate 11/11</div>
+      </div>
+    </div>
+    <p class="counterweight">None of this stops a determined copy. What it buys is time with the buyers everyone else is architecturally locked out of — and evidence that this founder ships verified work while they try.</p>
+  </div>
+</section>
+
+<!-- ══ 5 · THE MARKET ══ -->
+<section class="slide" id="s5">
+  <div class="inner">
+    <div class="kicker">05 · THE MARKET</div>
+    <h1>Both sides of the wedge are already priced.</h1>
+    <div class="tiles">
+      <div class="tile">
+        <div class="label">The Sims — lifetime players</div>
+        <div class="value">500M</div>
+        <div class="source">EA press release · Feb 2025</div>
+      </div>
+      <div class="tile">
+        <div class="label">inZOI — copies sold, first week</div>
+        <div class="value">1M</div>
+        <div class="source">Krafton press · Apr 2025</div>
+      </div>
+      <div class="tile">
+        <div class="label">Immersive training market, 2024</div>
+        <div class="value">$16.4B</div>
+        <div class="source">Grand View Research</div>
+      </div>
+      <div class="tile">
+        <div class="label">Raised by Labster — virtual lab sims</div>
+        <div class="value">$147M</div>
+        <div class="source">Labster / PR Newswire · 2021–22</div>
+      </div>
+      <div class="tile gap">
+        <div class="label">Beachhead — first target segment</div>
+        <div class="value" contenteditable="true" data-key="beachhead" data-hint="FIGURE NEEDED: size the chosen beachhead (e.g. Nordic lab &amp; safety training spend) + source" class="fill"></div>
+        <div class="source">founder decision → then source it</div>
+      </div>
+    </div>
+    <p class="market-note">The consumer numbers prove <b>appetite</b> — a first credible new entrant in years sold a million copies in a week. The training numbers price the <b>wedge</b>: institutions already pay for simulation, and investors already fund it. Nobody serves the locked-down, cloud-forbidden corner of that market. That corner is the business.</p>
+    <details class="sources">
+      <summary>SOURCES — pulled 11 Jul 2026 · verify each before presenting</summary>
+      <ul>
+        <li><span class="src-name">EA, “The Sims Celebrates 25 Years” (“more than 500 million lifetime players”):</span> news.ea.com/press-releases/press-releases-details/2025/The-Sims-Celebrates-25-Years-of-Simulated-Life/default.aspx</li>
+        <li><span class="src-name">Krafton, “1 million sales of inZOI in first week of early access” (4 Apr 2025):</span> krafton.com/en/news/press/krafton-hits-1-million-sales-of-inzoi-in-first-week-of-early-access-launch/</li>
+        <li><span class="src-name">Grand View Research, Immersive Training Market (USD 16,401.8M in 2024):</span> grandviewresearch.com/industry-analysis/immersive-training-market-report</li>
+        <li><span class="src-name">Labster $60M Series C led by Andreessen Horowitz (2021):</span> prnewswire.com/news-releases/labster-secures-60m-in-series-c-funding-led-by-andreessen-horowitz-301225763.html</li>
+        <li><span class="src-name">Labster +$47M, total $147M (Apr 2022):</span> labster.com/news/new-funding-april-2022</li>
+        <li><span class="src-name">Google for Education, 50M students &amp; educators on Chromebooks (Sept 2024):</span> blog.google/outreach-initiatives/education/google-chromebook-feature-update-september-2024/</li>
+        <li><span class="src-name">Datatilsynet Helsingør ruling, July 2022 (Google Workspace ban in municipal schools):</span> gdprhub.eu/index.php?title=Datatilsynet_(Denmark)_-_2020-431-0061_(Helsingor_decision_no._4)</li>
+      </ul>
+    </details>
+  </div>
+</section>
+
+<!-- ══ 6 · THE MODEL ══ -->
+<section class="slide" id="s6">
+  <div class="inner">
+    <div class="kicker">06 · THE MODEL</div>
+    <h1>How money arrives.</h1>
+    <div class="decision-block">
+      <div class="db-label">FOUNDER DECISION — UNFILLED. THE DECK DOES NOT GUESS.</div>
+      <span class="fill" contenteditable="true" data-key="model-primary" data-hint="PRIMARY REVENUE MODEL — pick exactly one of the candidates below, or your own"></span>
+    </div>
+    <div class="candidates">
+      <div class="candidate">
+        <div class="c-tag">CANDIDATE A — NOT CHOSEN</div>
+        <h4>Free game + paid scenario packs</h4>
+        <p>Consumer route. The game is the funnel; content is the product.</p>
+      </div>
+      <div class="candidate">
+        <div class="c-tag">CANDIDATE B — NOT CHOSEN</div>
+        <h4>Engine licensed to training providers</h4>
+        <p>B2B route. White-label the engine to the people who already sell training to institutions.</p>
+      </div>
+      <div class="candidate">
+        <div class="c-tag">CANDIDATE C — NOT CHOSEN</div>
+        <h4>Creator marketplace</h4>
+        <p>Platform route. Others author scenarios; the engine takes a cut.</p>
+      </div>
+    </div>
+    <div class="money-line">
+      <span>Who pays</span> <span class="fill" contenteditable="true" data-key="model-who" data-hint="the buyer"></span>
+      <span>for what</span> <span class="fill" contenteditable="true" data-key="model-what" data-hint="the thing invoiced"></span>
+      <span>when</span> <span class="fill" contenteditable="true" data-key="model-when" data-hint="the trigger event"></span>
+    </div>
+    <p class="fill-note" style="margin-top:18px">amber fields are editable — click, type, they persist on this machine</p>
+  </div>
+</section>
+
+<!-- ══ 7 · TRACTION / PROOF ══ -->
+<section class="slide" id="s7">
+  <div class="inner">
+    <div class="kicker">07 · TRACTION &amp; PROOF</div>
+    <h1>Every claim on this screen is reproducible.</h1>
+    <div class="tiles">
+      <div class="tile">
+        <div class="label">Frames simulated under the gate</div>
+        <div class="value">12,000</div>
+        <div class="source">= 7 simulated days</div>
+      </div>
+      <div class="tile">
+        <div class="label">Autonomous actions started</div>
+        <div class="value">1,343</div>
+        <div class="source">1,342 completed</div>
+      </div>
+      <div class="tile">
+        <div class="label">Runtime errors</div>
+        <div class="value">0</div>
+        <div class="source">across all 12,000 frames</div>
+      </div>
+      <div class="tile">
+        <div class="label">Correctness checks passing</div>
+        <div class="value">11/11</div>
+        <div class="source">headless merge gate</div>
+      </div>
+    </div>
+    <div class="gate-line"><span class="cmd-c">$ node harness.js 12000</span> &nbsp;→&nbsp; <span class="ok">✅ GATE PASSED — safe to merge.</span> &nbsp;Re-run it in front of them if they ask.</div>
+    <p class="provenance">Built with an <b>AI agent swarm</b>, then <b>audited by hand</b>. The audit caught three integration bugs the swarm’s own report claimed were fixed — including a fix written into a file the game never loads. All three are fixed, and that whole class of failure is now blocked automatically by a frozen interface contract (<b>INTERFACES.md</b>) and a headless merge gate (<b>harness.js</b>). The point is not how it was built. The point is that <b>nothing ships here unverified</b> — including the numbers on this screen.</p>
+    <div class="traction-block">
+      <div class="db-label" style="font-family:var(--mono);font-size:clamp(10.5px,.9vw,13px);letter-spacing:.16em;color:var(--amber);margin-bottom:10px">TRACTION — FOUNDER INPUT, STATED PLAINLY</div>
+      <span class="fill" contenteditable="true" data-key="traction" data-hint="users / revenue / LOIs / pilots — if there are none, write the words “pre-launch” and own it"></span>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 8 · THE ASK ══ -->
+<section class="slide" id="s8">
+  <div class="inner">
+    <div class="kicker" style="text-align:center">08 · THE ASK</div>
+    <div class="ask-amount"><span class="fill" contenteditable="true" data-key="ask-amount" data-hint="AMOUNT — £ / NOK"></span></div>
+    <div class="ask-for">FOR</div>
+    <div class="ask-equity"><span class="fill" contenteditable="true" data-key="ask-equity" data-hint="EQUITY %"></span></div>
+    <div class="funds">
+      <div class="f-label">WHAT THE MONEY BUYS — THREE LINES, NO MORE</div>
+      <span class="fill" contenteditable="true" data-key="funds-1" data-hint="use of funds — line 1"></span>
+      <span class="fill" contenteditable="true" data-key="funds-2" data-hint="use of funds — line 2"></span>
+      <span class="fill" contenteditable="true" data-key="funds-3" data-hint="use of funds — line 3"></span>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 9 · DRAGON-PROOFING ══ -->
+<section class="slide" id="s9">
+  <div class="inner">
+    <div class="kicker">09 · DRAGON-PROOFING</div>
+    <h1 style="font-size:clamp(1.6rem,3.4vw,2.8rem)">The five questions most likely to kill this — asked properly.</h1>
+    <div class="dragons">
+
+      <div class="dq">
+        <button type="button" aria-expanded="false">
+          <span class="qn">Q1</span>
+          <span class="qt">“EA has The Sims, 500 million lifetime players, and infinite money. Krafton just showed a challenger needs a AAA studio and a marketing war chest. Why won’t they crush you?”</span>
+        </button>
+        <div class="qa">
+          <p>They would — <b>if I were competing for their player.</b> I’m not. EA sells installed content to consumers with gaming hardware; its cost base needs exactly the machines and wallets I don’t target. My buyer is an institution whose computers can’t install anything — a place EA has no product for and no economic reason to build one. A 372&thinsp;KB offline file is beneath their cost structure, not ahead of it.</p>
+          <p style="margin-top:10px">Krafton’s million first-week copies cut the other way: they prove the genre has demand EA leaves unserved — and inZOI chases the high-end GPU owner, the opposite corner from a school Chromebook. <b>If I ever pitch this as a Sims competitor, kill the pitch.</b> That’s why I don’t.</p>
+        </div>
+      </div>
+
+      <div class="dq">
+        <button type="button" aria-expanded="false">
+          <span class="qn">Q2</span>
+          <span class="qt">“Who actually pays, and why now? Name the buyer, the budget line, and the reason it can’t wait.”</span>
+        </button>
+        <div class="qa">
+          <p><b>Today: nobody pays. This is pre-revenue and I won’t dress that up.</b> The buyer I’m going after is <span class="fill" contenteditable="true" data-key="dragon-buyer" data-hint="FOUNDER: named buyer type / first target institution"></span> — an organisation with a training obligation it already budgets for. Why now: since the 2022 Helsingør ruling, European regulators have been pulling institutions off US clouds while their device fleets stay locked down. The training obligation didn’t go away; the means to meet it did.</p>
+          <p style="margin-top:10px">The raise exists to convert exactly one such institution into a paying pilot. <b>That pilot is the real answer to this question — and it’s what the money buys.</b></p>
+        </div>
+      </div>
+
+      <div class="dq">
+        <button type="button" aria-expanded="false">
+          <span class="qn">Q3</span>
+          <span class="qt">“You built this with AI agents. If it cost you nearly nothing, it costs a competitor nearly nothing. What exactly am I buying?”</span>
+        </button>
+        <div class="qa">
+          <p>Not the code — the code is honestly cheap now, for me and for everyone. You’re buying three things. <b>One: the wedge</b> — a working zero-install engine already pointed at buyers other vendors are architecturally locked out of. <b>Two: the verification culture</b> — the swarm shipped confident false claims; the audit caught three of them; the merge gate now catches that class automatically. When code gets cheap, disciplined verification gets more valuable, not less. <b>Three: speed</b> — the same method that produced 9,512 verified lines produces scenario packs.</p>
+          <p style="margin-top:10px">If AI really does make software nearly free, returns move to whoever ships <b>trustworthy</b> software fastest. That’s the bet.</p>
+        </div>
+      </div>
+
+      <div class="dq">
+        <button type="button" aria-expanded="false">
+          <span class="qn">Q4</span>
+          <span class="qt">“Labster raised $147M and sells lab simulation to universities today. You’re one person with a text file. Why do you win?”</span>
+        </button>
+        <div class="qa">
+          <p><b>I don’t beat Labster where Labster works — I sell where they can’t go.</b> They are cloud-delivered by architecture: subscriptions, accounts, servers. Any institution that can use the cloud probably should use them; their $147M raised is my evidence the buyer exists. But air-gapped, offline, data-never-leaves-the-building deployments aren’t a feature they can patch in — they’re an architecture, and a business model, they’d have to abandon.</p>
+          <p style="margin-top:10px">Those deployments are smaller markets — and I’m one person with a 372&thinsp;KB payload. <b>My cost floor fits markets their cost floor can’t.</b></p>
+        </div>
+      </div>
+
+      <div class="dq">
+        <button type="button" aria-expanded="false">
+          <span class="qn">Q5</span>
+          <span class="qt">“No revenue, no pilot, no team — and you have other commitments. How much of your life does this get, and what exactly does my money buy in twelve months?”</span>
+        </button>
+        <div class="qa">
+          <p><span class="fill" contenteditable="true" data-key="dragon-commit" data-hint="FOUNDER: the true hours/week this gets, and what triggers going full-time — do not soften it"></span></p>
+          <p style="margin-top:10px">What the money buys is the same three lines as the ask — and one concrete promise: <b>within twelve months there is either a paying pilot, or a documented reason there never will be.</b> I ship verified work or I say plainly that it failed. You’ve seen the habit in this deck: the gaps are marked, not painted over.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ══ Chrome ══ -->
+<header id="chrome-top" aria-hidden="true">
+  <div>STICKY SIMS — INVESTOR DEMO</div>
+  <div id="telemetry">
+    <span>NET <span class="t-val" id="t-net">—</span></span>
+    <span>ENGINE <span class="t-val" id="t-engine">BOOTING</span></span>
+    <span>SIMS <span class="t-val" id="t-sims">—</span></span>
+    <span>CLOCK <span class="t-val" id="t-clock">—</span></span>
+    <span>ACTIONS <span class="t-val" id="t-actions">—</span></span>
+    <span>ERR <span class="t-val t-good" id="t-err">0</span></span>
+  </div>
+</header>
+
+<footer id="chrome-bottom">
+  <div id="key-hints"><b>←</b>/<b>→</b> move · <b>D</b> dragon-proofing · <b>1–9</b> jump</div>
+  <div id="rail-wrap">
+    <div id="rail" role="tablist" aria-label="Sections"></div>
+    <div id="rail-label"><b id="rail-num">01/09</b> · <span id="rail-name">HOOK</span></div>
+  </div>
+  <div id="nav-btns">
+    <button id="btn-prev" aria-label="Previous section">‹</button>
+    <button id="btn-next" aria-label="Next section">›</button>
+  </div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ── The entire game, inlined at build time (JSON string) ───── */
+  var GAME_SRC = "__GAME_SRC_PLACEHOLDER__";
+
+  /* ── Sections ───────────────────────────────────────────────── */
+  var SECTIONS = [
+    { id: 's1', name: 'HOOK',            game: 'hook' },
+    { id: 's2', name: 'THE PROBLEM',     game: 'hidden' },
+    { id: 's3', name: 'THE PRODUCT — LIVE', game: 'full' },
+    { id: 's4', name: 'THE MOAT',        game: 'hidden' },
+    { id: 's5', name: 'THE MARKET',      game: 'hidden' },
+    { id: 's6', name: 'THE MODEL',       game: 'hidden' },
+    { id: 's7', name: 'PROOF',           game: 'hidden' },
+    { id: 's8', name: 'THE ASK',         game: 'hidden' },
+    { id: 's9', name: 'DRAGON-PROOFING', game: 'hidden' }
+  ];
+  var current = 0;
+
+  var frame = document.getElementById('game-frame');
+  var wrap = document.getElementById('game-frame-wrap');
+
+  function bootGame() {
+    frame.srcdoc = GAME_SRC;
+  }
+  // The kiosk message can race the iframe's first load — resend on load.
+  frame.addEventListener('load', function () {
+    postToGame({ type: 'kiosk', on: SECTIONS[current].game === 'hook' });
+  });
+
+  /* ── Layout: scale the fixed-size game to the viewport ──────── */
+  var GAME_W = 1280, GAME_H = 800;
+  function layoutGame() {
+    var mode = SECTIONS[current].game;
+    var vw = window.innerWidth, vh = window.innerHeight;
+    if (mode === 'hook') {
+      // Kiosk: iframe fills the screen; the game covers via object-fit.
+      wrap.style.width = vw + 'px';
+      wrap.style.height = vh + 'px';
+      wrap.style.transform = 'none';
+      frame.style.width = vw + 'px';
+      frame.style.height = vh + 'px';
+    } else {
+      // Instrument panel: fit 1280×800 between the chrome bars.
+      var topH = 62, botH = 74, pad = 10;
+      if (mode === 'full') {
+        // Section 3's title sits over the game; its height varies with
+        // viewport width (clamp/vw units), so measure it live and start
+        // the game right below it — never guess a fixed offset.
+        var head = document.querySelector('#s3 .demo-head');
+        if (head) topH = Math.max(topH, Math.ceil(head.getBoundingClientRect().bottom) + 14);
+        var hints = document.querySelector('#s3 .demo-hints');
+        if (hints) botH = Math.max(botH, Math.ceil(vh - hints.getBoundingClientRect().top) + 14);
+      }
+      var availW = vw - pad * 2, availH = vh - topH - botH;
+      var s = Math.min(availW / GAME_W, availH / GAME_H);
+      var x = (vw - GAME_W * s) / 2;
+      var y = topH + (availH - GAME_H * s) / 2;
+      wrap.style.width = GAME_W + 'px';
+      wrap.style.height = GAME_H + 'px';
+      wrap.style.transform = 'translate(' + x + 'px,' + y + 'px) scale(' + s + ')';
+      frame.style.width = GAME_W + 'px';
+      frame.style.height = GAME_H + 'px';
+    }
+  }
+  window.addEventListener('resize', layoutGame);
+
+  function postToGame(msg) {
+    try { if (frame.contentWindow) frame.contentWindow.postMessage(msg, '*'); } catch (e) {}
+  }
+
+  /* ── Navigation ─────────────────────────────────────────────── */
+  var rail = document.getElementById('rail');
+  SECTIONS.forEach(function (s, i) {
+    var b = document.createElement('button');
+    b.setAttribute('aria-label', (i + 1) + ' — ' + s.name);
+    b.title = (i + 1) + ' · ' + s.name;
+    b.addEventListener('click', function () { go(i); });
+    rail.appendChild(b);
+  });
+  var railBtns = Array.prototype.slice.call(rail.children);
+
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+  function go(i) {
+    if (i < 0) i = 0;
+    if (i > SECTIONS.length - 1) i = SECTIONS.length - 1;
+    current = i;
+    SECTIONS.forEach(function (s, j) {
+      document.getElementById(s.id).classList.toggle('active', j === i);
+      railBtns[j].classList.toggle('current', j === i);
+      railBtns[j].classList.toggle('done', j < i);
+    });
+    document.getElementById('rail-num').textContent = pad2(i + 1) + '/' + pad2(SECTIONS.length);
+    document.getElementById('rail-name').textContent = SECTIONS[i].name;
+    var mode = SECTIONS[i].game;
+    document.body.classList.toggle('game-hook', mode === 'hook');
+    document.body.classList.toggle('game-full', mode === 'full');
+    document.body.classList.toggle('game-hidden', mode === 'hidden');
+    postToGame({ type: 'kiosk', on: mode === 'hook' });
+    layoutGame();
+    // Re-measure once the slide's enter transition (.4s) settles — the
+    // title's on-screen position can be mid-transform at the instant above.
+    if (mode === 'full') setTimeout(layoutGame, 450);
+    document.body.dataset.section = String(i);
+  }
+
+  document.getElementById('btn-prev').addEventListener('click', function () { go(current - 1); });
+  document.getElementById('btn-next').addEventListener('click', function () { go(current + 1); });
+  document.getElementById('btn-restart-sim').addEventListener('click', function () {
+    bootGame();
+  });
+
+  function inEditable() {
+    var el = document.activeElement;
+    return el && (el.isContentEditable || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT');
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (inEditable()) return;
+    switch (e.key) {
+      case 'ArrowRight': case 'PageDown': go(current + 1); e.preventDefault(); break;
+      case 'ArrowLeft':  case 'PageUp':   go(current - 1); e.preventDefault(); break;
+      case 'Home': go(0); e.preventDefault(); break;
+      case 'End':  go(SECTIONS.length - 1); e.preventDefault(); break;
+      case 'd': case 'D': go(8); break;
+      case 'g': case 'G': go(2); break;
+      default:
+        if (/^[1-9]$/.test(e.key) && !e.ctrlKey && !e.altKey && !e.metaKey) go(Number(e.key) - 1);
+    }
+  });
+
+  // Nav keys forwarded out of the game iframe, plus live telemetry in.
+  window.addEventListener('message', function (e) {
+    var d = e.data || {};
+    if (d.type === 'nav') {
+      if (d.key === 'ArrowRight' || d.key === 'PageDown') go(current + 1);
+      if (d.key === 'ArrowLeft' || d.key === 'PageUp') go(current - 1);
+    }
+    if (d.type === 'telemetry') updateTelemetry(d);
+  });
+
+  /* ── Telemetry readouts (all live, nothing hardcoded) ───────── */
+  var tEngine = document.getElementById('t-engine');
+  var tSims = document.getElementById('t-sims');
+  var tClock = document.getElementById('t-clock');
+  var tActions = document.getElementById('t-actions');
+  var tErr = document.getElementById('t-err');
+
+  function updateTelemetry(d) {
+    tEngine.textContent = d.paused ? 'PAUSED' : 'ONLINE';
+    tEngine.className = 't-val' + (d.paused ? '' : ' t-good');
+    if (typeof d.sims === 'number') tSims.textContent = d.sims;
+    if (typeof d.day === 'number') {
+      tClock.textContent = 'D' + d.day + ' ' + pad2(d.hour || 0) + ':' + pad2(Math.floor(d.minute || 0));
+    }
+    if (typeof d.actions === 'number') tActions.textContent = d.actions;
+    tErr.textContent = d.errs || 0;
+    tErr.className = 't-val ' + (d.errs ? 't-bad' : 't-good');
+  }
+
+  var tNet = document.getElementById('t-net');
+  function updateNet() {
+    var off = !navigator.onLine;
+    // Offline is the point — it reads as the good state here.
+    tNet.textContent = off ? 'OFFLINE ✓' : 'ONLINE';
+    tNet.className = 't-val' + (off ? ' t-good' : '');
+  }
+  window.addEventListener('online', updateNet);
+  window.addEventListener('offline', updateNet);
+  updateNet();
+
+  /* ── Founder-input fields: persist locally, never invent ────── */
+  var LS_PREFIX = 'stickypitch.';
+  function lsGet(k) { try { return localStorage.getItem(LS_PREFIX + k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(LS_PREFIX + k, v); } catch (e) {} }
+  Array.prototype.forEach.call(document.querySelectorAll('.fill[data-key]'), function (el) {
+    var k = el.dataset.key;
+    var saved = lsGet(k);
+    if (saved) { el.textContent = saved; el.classList.add('filled'); }
+    el.addEventListener('input', function () {
+      var v = el.textContent.trim();
+      lsSet(k, v);
+      el.classList.toggle('filled', v.length > 0);
+    });
+    // Keep pitch shortcuts from firing while typing; allow Escape to blur.
+    el.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { el.blur(); }
+      if (e.key === 'Enter' && !el.classList.contains('multiline')) { e.preventDefault(); el.blur(); }
+    });
+  });
+
+  /* ── Dragon-proofing accordion ──────────────────────────────── */
+  Array.prototype.forEach.call(document.querySelectorAll('.dq > button'), function (btn) {
+    btn.addEventListener('click', function () {
+      var dq = btn.parentElement;
+      var open = dq.classList.toggle('open');
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+  });
+
+  /* ── Boot ───────────────────────────────────────────────────── */
+  bootGame();
+  go(0);
+})();
+</script>
+</body>
+</html>
