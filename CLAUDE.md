@@ -6,18 +6,58 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **YMER** - The Giant and the old Mother Cow
 
-This is an early-stage project. Currently the repository contains only a README with the project title and description. Future development will expand the codebase and architecture.
+This repository hosts the **BASE Compute Fabric** (v0.2): a broker that routes client compute jobs (CPU, GPU, specialist) through self-service and human-expert entry points to internal and external compute providers, with cost/usage/evidence ledgers underneath. See `compute-fabric/README.md` for the module map and build-order status (P0–P4).
 
 ## Repository Structure
 
 ```
 YMER/
-├── README.md           # Project overview
-├── CLAUDE.md          # This file - guidance for Claude Code
-└── .git/              # Git repository metadata
+├── README.md              # Project overview
+├── CLAUDE.md              # This file - guidance for Claude Code
+├── compute-fabric/        # BASE Compute Fabric (P0–P3, plus P4's accounting layer)
+│   ├── schema/             # Capability, Priority, ComputeUnit, Job dataclasses
+│   ├── providers/          # Provider ABC + local/llama.cpp/RTM/HF/node/MRR/GPU adapters
+│   ├── registry/           # CapabilityRegistry (lane + enabled enforcement)
+│   ├── scheduler/          # Router (cheapest-fits) + Scheduler (priority lanes)
+│   ├── quoting/            # PricingPolicy, Public/InternalQuote, QuoteGenerator
+│   ├── kam/                 # KamEstimator
+│   ├── markoff/            # Product classes + public front desk
+│   ├── contracts/          # Lease terms model + packages
+│   ├── sales/               # Checkout (payment port) + lead pipeline
+│   ├── treasury/           # Reward accrual, FREE Points, controls, settlement port
+│   ├── costing/            # CostLedger (append-only cost records)
+│   ├── meter/               # Meter (append-only usage records)
+│   ├── evidence/            # EvidenceLedger + atomic write helper
+│   ├── tests/               # pytest suite for all of the above
+│   └── README.md
+└── .git/                  # Git repository metadata
 ```
 
-As the project evolves, this structure will expand based on the type of application being built (web app, CLI tool, library, etc.).
+P4's accounting layer is built. The parts that move value or issue an instrument — a crypto settlement rail, the FREE Meme token — are deliberately absent and need legal input before code. See `compute-fabric/README.md`.
+
+## Invariants
+
+Six rules hold across the fabric; `compute-fabric/README.md` has the detail.
+
+1. **A job payload is untrusted.** Never turn it into a command line or a
+   filesystem path. Select from an operator-registered allowlist instead.
+2. **`PublicQuote` and `PublicOffer` never gain a cost, margin or provider
+   field.** The spec §4 barrier is enforced by the type, not by filtering at the
+   edge.
+3. **A gated adapter stays gated.** `huggingface`, `remote_node`, `mrr` and
+   `gpu_lease` are disabled and unverified; enabling any of them is a compliance
+   decision, not a config tweak.
+4. **Idle-lane work never takes paid capacity.** The scheduler dispatches BASE →
+   client → PoC → idle, and `RtmIdleProvider` refuses anything above the idle
+   lane. Both checks stay: the failure is a revenue loss that would be silent.
+5. **Card data never enters this repository.** Checkout holds a processor
+   reference and nothing else. Adding a PAN/CVV/expiry field pulls the whole
+   codebase into PCI scope; make that decision deliberately or not at all.
+6. **FREE Points are not a token, and no rail moves value.** No transfer, no
+   cash-out, minted only against recorded activity; `LedgerOnlyRail` is the only
+   settlement rail. Adding a transfer path, a cash-out, or a crypto rail is a
+   regulatory decision (MiCA is in scope in the EEA), not a feature. Tests
+   assert each absence.
 
 ## Git Workflow
 
@@ -43,13 +83,10 @@ Commit messages should be clear and concise:
 
 ## Development Setup
 
-As the project matures, this section will be expanded with:
-- Required dependencies and versions
-- Environment setup instructions
-- Commands to build, test, and run the application
-- Linting and code formatting requirements
-
-Currently, there are no build or test dependencies configured.
+- **Language**: Python 3.11+ (standard library only for P0; no external runtime dependencies).
+- **Test dependency**: `pytest` (`pip install pytest`).
+- **Run tests**: `python3 -m pytest compute-fabric/tests/ -v` from the repo root.
+- No build step; modules under `compute-fabric/` are imported directly (tests add the `compute-fabric/` directory to `sys.path` via `conftest.py`, since it's a hyphenated directory name, not an importable package).
 
 ## Code Conventions
 
